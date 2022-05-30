@@ -139,7 +139,7 @@ class Robot(base_robot.BaseRobot):
             raise NotImplementedError()
 
         else:
-            #Gather simulated observation
+            # Gather simulated observation
             qp = env.sim.data.qpos[:self.n_jnt].copy()
             qv = env.sim.data.qvel[:self.n_jnt].copy()
             if self.has_obj:
