@@ -22,3 +22,30 @@ register(
     entry_point='adept_envs.franka.kitchen_multitask_v0:KitchenTaskRelaxV1',
     max_episode_steps=280,
 )
+
+register(
+    id='kitchen_relax-v2',
+    entry_point='adept_envs.franka.kitchen_multitask_v0:KitchenTaskRelaxV2',
+    max_episode_steps=280,
+)
+
+register(
+    id='kitchen_relax_model-v1',
+    entry_point='adept_envs.franka.kitchen_multitask_v0:KitchenTaskRelaxModelV1',
+    kwargs={"model_filename": 'franka_kitchen_jntpos_act_ab.xml'},
+    max_episode_steps=280,
+)
+
+register(
+    id='kitchen_kettle-v0',
+    entry_point='adept_envs.franka.kitchen_multitask_v0:KitchenKettleV0',
+    kwargs={"model_filename": 'franka_kitchen_jntpos_act_ab.xml'},
+    max_episode_steps=280,
+)
+
+register(
+    id='kitchen_microwave-v0',
+    entry_point='adept_envs.franka.kitchen_multitask_v0:KitchenMicrowaveV0',
+    kwargs={"model_filename": 'franka_kitchen_jntpos_act_ab.xml'},
+    max_episode_steps=280,
+)

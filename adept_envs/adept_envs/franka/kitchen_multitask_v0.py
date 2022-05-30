@@ -22,6 +22,28 @@ from adept_envs.utils.configurable import configurable
 from gym import spaces
 from dm_control.mujoco import engine
 
+
+OBS_ELEMENT_INDICES = {
+    'bottom burner': np.array([11, 12]),
+    'top burner': np.array([15, 16]),
+    'light switch': np.array([17, 18]),
+    'slide cabinet': np.array([19]),
+    'hinge cabinet': np.array([20, 21]),
+    'microwave': np.array([22]),
+    'kettle': np.array([23, 24, 25]),
+    }
+OBS_ELEMENT_GOALS = {
+    'bottom burner': np.array([-0.88, -0.01]),
+    'top burner': np.array([-0.92, -0.01]),
+    'light switch': np.array([-0.69, -0.05]),
+    'slide cabinet': np.array([0.37]),
+    'hinge cabinet': np.array([0., 1.45]),
+    'microwave': np.array([-0.75]),
+    'kettle': np.array([-0.19, 0.75, 1.62]),
+    }
+BONUS_THRESH = 0.2
+
+
 @configurable(pickleable=True)
 class KitchenV0(robot_env.RobotEnv):
 
@@ -134,7 +156,7 @@ class KitchenV0(robot_env.RobotEnv):
         reset_vel = self.init_qvel[:].copy()
         self.robot.reset(self, reset_pos, reset_vel)
         self.sim.forward()
-        self.goal = self._get_task_goal()  #sample a new goal on reset
+        self.goal = self._get_task_goal()  # sample a new goal on reset
         return self._get_obs()
 
     def evaluate_success(self, paths):
@@ -196,3 +218,108 @@ class KitchenTaskRelaxV1(KitchenV0):
             return img
         else:
             super(KitchenTaskRelaxV1, self).render()
+
+class KitchenTaskRelaxV2(KitchenTaskRelaxV1):
+    """Use postion Controller instead of velocity controller."""
+
+    ROBOTS = {'robot': 'adept_envs.franka.robot.franka_robot:Robot_PosAct'}
+
+    def __init__(self):
+        super(KitchenTaskRelaxV2, self).__init__()
+
+    def step(self, a, b=None):
+
+        if self.initializing:
+            self.goal = self._get_task_goal()  # update goal if init
+
+        self.robot.step(
+            self, a, step_duration=self.skip * self.model.opt.timestep)
+
+        # observations
+        obs = self._get_obs()
+
+        #rewards
+        reward_dict, score = self._get_reward_n_score(self.obs_dict)
+
+        # termination
+        done = False
+
+        # finalize step
+        env_info = {
+            'time': self.obs_dict['t'],
+            'obs_dict': self.obs_dict,
+            'rewards': reward_dict,
+            'score': score,
+            'images': np.asarray(self.render(mode='rgb_array'))
+        }
+        # self.render()
+        return obs, reward_dict['r_total'], done, env_info
+
+class KitchenTaskRelaxModelV1(KitchenTaskRelaxV2):
+    
+    # A string of element names. The robot's task is then to modify each of
+    # these elements appropriately.
+    TASK_ELEMENTS = []
+    REMOVE_TASKS_WHEN_COMPLETE = False
+
+    def __init__(self, model_filename='franka_kitchen_jntpos_act_ab_test.xml'):
+
+        self.tasks_to_complete = set(self.TASK_ELEMENTS)
+
+        self.MODEl = os.path.join(
+            os.path.dirname(__file__),
+            '../franka/assets',
+            model_filename)
+
+        super(KitchenTaskRelaxModelV1, self).__init__()
+        
+        POS_ID = {'robot' : 2, 'kettle' : 43}
+        kettle_x, kettle_y, kettle_z = self.model.body_pos[POS_ID['kettle']]
+        self.init_qpos[OBS_ELEMENT_INDICES['kettle']] = [kettle_x, kettle_y, kettle_z]
+
+    def _get_task_goal(self):
+        new_goal = np.zeros_like(self.goal)
+        for element in self.TASK_ELEMENTS:
+            element_idx = OBS_ELEMENT_INDICES[element]
+            element_goal = OBS_ELEMENT_GOALS[element]
+            new_goal[element_idx] = element_goal
+
+        return new_goal
+    
+    def _get_reward_n_score(self, obs_dict):
+        reward_dict, score = super(KitchenTaskRelaxModelV1, self)._get_reward_n_score(obs_dict)
+        reward = 0.
+        next_q_obs = obs_dict['qp']
+        next_obj_obs = obs_dict['obj_qp']
+        next_goal = obs_dict['goal']
+        idx_offset = len(next_q_obs)
+        completions = []
+        dist = []
+        for element in self.tasks_to_complete:
+            element_idx = OBS_ELEMENT_INDICES[element]
+            distance = np.linalg.norm(
+                next_obj_obs[..., element_idx - idx_offset] -
+                next_goal[element_idx])
+            dist.append(distance)
+            complete = distance < BONUS_THRESH
+            if complete:
+                completions.append(element)
+        if self.REMOVE_TASKS_WHEN_COMPLETE:
+            [self.tasks_to_complete.remove(element) for element in completions]
+        bonus = float(len(completions))
+        reward_dict['bonus'] = bonus
+        reward_dict['r_total'] = bonus
+        reward_dict['dist'] = dist
+        score = bonus
+        return reward_dict, score
+    
+    def reset_model(self):
+        self.tasks_to_complete = set(self.TASK_ELEMENTS)
+        return super(KitchenTaskRelaxModelV1, self).reset_model()
+
+
+class KitchenKettleV0(KitchenTaskRelaxModelV1):
+    TASK_ELEMENTS = ['kettle']
+
+class KitchenMicrowaveV0(KitchenTaskRelaxModelV1):
+    TASK_ELEMENTS = ['microwave']
