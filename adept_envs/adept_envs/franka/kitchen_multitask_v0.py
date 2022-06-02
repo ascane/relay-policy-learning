@@ -199,7 +199,10 @@ class KitchenV0(robot_env.RobotEnv):
 class KitchenTaskRelaxV1(KitchenV0):
     """Kitchen environment with proper camera and goal setup"""
 
-    def __init__(self):
+    def __init__(self, cam_height=1920, cam_width=2560):
+        self.cam_height = cam_height
+        self.cam_width = cam_width
+
         super(KitchenTaskRelaxV1, self).__init__()
 
     def _get_reward_n_score(self, obs_dict):
@@ -212,7 +215,8 @@ class KitchenTaskRelaxV1(KitchenV0):
 
     def render(self, mode='human'):
         if mode =='rgb_array':
-            camera = engine.MovableCamera(self.sim, 1920, 2560)
+            # camera = engine.MovableCamera(self.sim, 1920, 2560)
+            camera = engine.MovableCamera(self.sim, self.cam_height, self.cam_width)
             camera.set_pose(distance=2.2, lookat=[-0.2, .5, 2.], azimuth=70, elevation=-35)
             img = camera.render()
             return img
@@ -224,8 +228,8 @@ class KitchenTaskRelaxV2(KitchenTaskRelaxV1):
 
     ROBOTS = {'robot': 'adept_envs.franka.robot.franka_robot:Robot_PosAct'}
 
-    def __init__(self):
-        super(KitchenTaskRelaxV2, self).__init__()
+    def __init__(self, cam_height=1920, cam_width=2560):
+        super(KitchenTaskRelaxV2, self).__init__(cam_height, cam_width)
 
     def step(self, a, b=None):
 
@@ -262,7 +266,8 @@ class KitchenTaskRelaxModelV1(KitchenTaskRelaxV2):
     TASK_ELEMENTS = []
     REMOVE_TASKS_WHEN_COMPLETE = False
 
-    def __init__(self, model_filename='franka_kitchen_jntpos_act_ab_test.xml'):
+    def __init__(self, model_filename='franka_kitchen_jntpos_act_ab_test.xml', \
+        cam_height=1920, cam_width=2560):
 
         self.tasks_to_complete = set(self.TASK_ELEMENTS)
 
@@ -271,7 +276,7 @@ class KitchenTaskRelaxModelV1(KitchenTaskRelaxV2):
             '../franka/assets',
             model_filename)
 
-        super(KitchenTaskRelaxModelV1, self).__init__()
+        super(KitchenTaskRelaxModelV1, self).__init__(cam_height, cam_width)
         
         POS_ID = {'robot' : 2, 'kettle' : 43}
         kettle_x, kettle_y, kettle_z = self.model.body_pos[POS_ID['kettle']]
